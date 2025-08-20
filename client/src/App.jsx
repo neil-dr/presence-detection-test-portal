@@ -69,7 +69,7 @@ export default function App() {
   const [duration, setDuration] = useState(10); // seconds (BE is authoritative)
   const [countdown, setCountdown] = useState(null);
 
-  const [presenceDetected, setPresenceDetected] = useState(false);
+  const [presenceDetected, setPresenceDetected] = useState(null);
   const [logs, setLogs] = useState([]);
   const [stopTestModal, setStopTestModal] = useState(false);
 
@@ -98,7 +98,7 @@ export default function App() {
   // --- WS handling ---
   function openLogsSocket(id) {
     closeLogsSocket();
-    const wsUrl = `${WS_BASE}/logs?testId=${encodeURIComponent(id)}`.replace(/^http/, "ws");
+    const wsUrl = `${WS_BASE}/logs`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -108,11 +108,15 @@ export default function App() {
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data);
+        console.log(msg)
         if (msg.type === "log" && msg.message) {
           pushLog(msg.message);
         } else if (msg.type === "presence") {
           setPresenceDetected(true);
-          pushLog(`Presence detected${msg.confidence ? ` (conf=${msg.confidence})` : ""}.`);
+          pushLog(`Presence detected.`);
+        } else if (msg.type === "absence") {
+          setPresenceDetected(false);
+          pushLog(`Presence not detected.`);
         } else if (msg.type === "finalize") {
           // BE can notify end-of-test (defined mode)
           pushLog("Test finalized.");
@@ -152,7 +156,7 @@ export default function App() {
 
   async function startDefinedTest() {
     try {
-      setPresenceDetected(false);
+      setPresenceDetected(null);
       setLogs([]);
       setModal(null);
       setCountdown(duration);
@@ -191,7 +195,7 @@ export default function App() {
     setTestId(id);
     setModal(null);
     setLogs([]);
-    setPresenceDetected(false);
+    setPresenceDetected(null);
     openLogsSocket(id);
     apiPost("/api/start_infinite", { testId: id })
       .then(() => pushLog("Infinite test started."))
@@ -200,7 +204,7 @@ export default function App() {
 
   function restartFlow() {
     setModal("testType");
-    setPresenceDetected(false);
+    setPresenceDetected(null);
     setCountdown(null);
     setDescription("");
     setGoal("Trigger presence detection");
@@ -209,7 +213,7 @@ export default function App() {
   }
 
   function infiniteExit() {
-    setPresenceDetected(false);
+    setPresenceDetected(null);
     setStopTestModal(true);
     apiPost("/api/stop_infinite", { testId })
       .then(() => pushLog("Infinite test stopped."))
@@ -219,11 +223,11 @@ export default function App() {
 
   // React to presence events
   useEffect(() => {
-    if (testMode === "defined" && presenceDetected) {
+    if (testMode === "defined" && typeof presenceDetected == "boolean") {
       if (timerRef.current) clearInterval(timerRef.current);
       setModal("resultTriggered");
     }
-    if (testMode === "infinite" && presenceDetected) {
+    if (testMode === "infinite" && typeof presenceDetected == "boolean") {
       setModal("infinitePrompt");
     }
   }, [presenceDetected, testMode]);
@@ -316,13 +320,15 @@ export default function App() {
         </div>
       </Modal>
 
-      <Modal open={modal === "resultTriggered"} title="Presence detection triggered">
+      <Modal open={modal === "resultTriggered"} title={`Presence detection ${!presenceDetected ? 'not' : ''} triggered`}>
         <p className="text-sm" style={{ color: COLORS.subtle }}>Logs and test files saved to "{testId}_test_data".</p>
         <Btn onClick={restartFlow}>Start test again</Btn>
       </Modal>
 
-      <Modal open={modal === "infinitePrompt"} title="Presence detected">
-        <Btn onClick={() => setPresenceDetected(false)}>Continue</Btn>
+      <Modal open={modal === "infinitePrompt"} title={`Presence ${!presenceDetected ? 'not' : ''} detected`}>
+        <Btn onClick={() => {
+          chooseInfinite()
+        }}>Continue</Btn>
         <Btn variant="outline" onClick={infiniteExit}>Exit</Btn>
       </Modal>
 

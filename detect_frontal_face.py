@@ -1,8 +1,7 @@
 import cv2
-import time
-from ultralytics import YOLO
 import mediapipe as mp
 from types import *
+from ultralytics import YOLO
 from config import *
 
 yolo = YOLO(YOLO_MODEL_PATH)

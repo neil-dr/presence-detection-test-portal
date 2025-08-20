@@ -4,14 +4,13 @@ from types import *
 from detect_person import detect_person
 from config import *
 from threading import Event
+from ultralytics import YOLO
 
-# --- Session state ---
-stare_start_time = None
-last_face_time = None
-
+YOLO(YOLO_MODEL_PATH)
 
 def detection_loop(stop: Event):
-    global stare_start_time, last_face_time
+    stare_start_time = None
+    last_face_time = None
     try:
         while not stop.is_set():
             is_face_in_front_of_camera = detect_person()

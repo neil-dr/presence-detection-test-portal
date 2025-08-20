@@ -8,7 +8,6 @@ def detect_person():
     failures = 0
     while True:
         ret, frame = capture_frames()
-        print('a capture')
         if not ret:
             failures += 1
             if failures >= MAX_CAM_FAILURES:
