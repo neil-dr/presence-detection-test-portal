@@ -12,7 +12,7 @@ from threading import Event, Thread
 
 # --- your modules ---
 # must be non-blocking init/teardown
-from camera_manager import open_camera, close_camera
+from camera_manager import open_camera, close_camera, capture_frames
 # blocking; exits on presence OR when stop_event is set
 from index import detection_loop
 import test_manager
@@ -84,6 +84,7 @@ class StopInfiniteReq(BaseModel):
 def acquire_camera() -> bool:
     # open_camera should initialize cv2.VideoCapture and return quickly (non-blocking)
     open_camera()
+    capture_frames()
     return True
 
 

@@ -3,3 +3,4 @@ __pycache__/
 venv
 venv310
 node_modules
+config.bat
