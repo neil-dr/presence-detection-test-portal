@@ -24,13 +24,19 @@ To run the project:
 
    ```bash
    python3.10 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   venv\\Scripts\\activate # On Windows
+   ```
+   or
+   ```bash
+   py -3.10 -m venv venv_1
+   venv\\Scripts\\activate # On Windows
    ```
 
-2. Install dependencies using `requirements.txt`:
+2. Install dependencies using following commands:
 
    ```bash
-   pip install -r requirements.txt
+   pip install mediapipe fastapi opencv-python ultralytics
+   pip install uvicorn
    ```
 
    If you encounter issues, make sure the following packages are installed:
