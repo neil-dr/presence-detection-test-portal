@@ -15,6 +15,8 @@ from threading import Event, Thread
 from camera_manager import open_camera, close_camera
 # blocking; exits on presence OR when stop_event is set
 from index import detection_loop
+import test_manager
+from test_manager import save_test_result
 
 app = FastAPI(title="Presence Test Server")
 app.add_middleware(
@@ -100,27 +102,15 @@ def _set_after(stop: Event, seconds: float):
 
 
 def run_defined_test(duration: int):
-    # test_dir = Path(f"{payload.testId}_test_data")
-    # (test_dir / "frames").mkdir(parents=True, exist_ok=True)
-    # (test_dir / "artifacts").mkdir(parents=True, exist_ok=True)
-
-    # meta = {
-    #     "testId": payload.testId,
-    #     "mode": "defined",
-    #     "goal": payload.goal,
-    #     "description": payload.description,
-    #     "duration": payload.duration,
-    #     "startedAt": utcnow(),
-    # }
-    # (test_dir / "test.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-
-    # log(test_id, "Analyzer warmup...")
-    # time.sleep(0.3)
-
     stop = Event()
     # Arm a timer that sets `stop` after `duration` seconds unless already set
     timer = Thread(target=_set_after, args=(stop, duration), daemon=True)
     timer.start()
+
+    start_ts = utcnow()
+    t0 = time.monotonic()
+    detected_at = None
+    outcome = False
 
     try:
         outcome = detection_loop(stop)  # returns on presence or stop set
@@ -128,30 +118,51 @@ def run_defined_test(duration: int):
         if (outcome):
             type = "presence"
             broadcast({"type": type, "ts": utcnow()})
+            detected_at = utcnow()
         else:
             broadcast({"type": type, "ts": utcnow()})
     except Exception as e:
         log(f"Detection error: {e}")
+    finally:
+        end_time = utcnow()
+        run_time = round(time.monotonic() - t0, 3)
+        save_test_result(
+            test_id=test_manager.test_id,
+            start_time=start_ts,
+            end_time=end_time,
+            test_type="defined",
+            face_detected=outcome,
+            detected_at=detected_at,
+            run_time=run_time,
+        )
     return
 
 
 def run_infinite_test():
-    # test_dir = Path(f"{test_id}_test_data")
-    # (test_dir / "frames").mkdir(parents=True, exist_ok=True)
-    # (test_dir / "artifacts").mkdir(parents=True, exist_ok=True)
-
-    # meta_path = test_dir / "test.json"
-    # meta = {"testId": test_id, "mode": "infinite", "startedAt": utcnow()}
-    # meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-
     log("Infinite test started.")
+    start_ts = utcnow()
+    t0 = time.monotonic()
+    detected_at = None
+    outcome = False
 
     outcome = detection_loop(infinite_stop_event)
     if (outcome):
         type = "presence"
         broadcast({"type": type, "ts": utcnow()})
+        detected_at = utcnow()
     else:
         broadcast({"type": type, "ts": utcnow()})
+    end_time = utcnow()
+    run_time = round(time.monotonic() - t0, 3)
+    save_test_result(
+        test_id=test_manager.test_id,
+        start_time=start_ts,
+        end_time=end_time,
+        test_type="infinite",
+        face_detected=outcome,
+        detected_at=detected_at,
+        run_time=run_time,
+    )
 # ---- API ----
 
 
@@ -171,6 +182,7 @@ def start_defined(req: StartDefinedReq):
     if req.testId in tests and tests[req.testId].get("thread") and tests[req.testId]["thread"].is_alive():
         raise HTTPException(status_code=409, detail={
                             "ok": False, "error": "test_already_running"})
+    test_manager.test_id = req.testId
     duration = req.duration
     t = Thread(target=run_defined_test, args=(duration,), daemon=True)
     tests[req.testId] = {"mode": "defined", "thread": t}
@@ -184,6 +196,7 @@ def start_infinite(req: StartInfiniteReq):
     if req.testId in tests and tests[req.testId].get("thread") and tests[req.testId]["thread"].is_alive():
         raise HTTPException(status_code=409, detail={
                             "ok": False, "error": "test_already_running"})
+    test_manager.test_id = req.testId
     infinite_stop_event = Event()
     t = Thread(target=run_infinite_test, daemon=True)
     tests[req.testId] = {"mode": "infinite", "thread": t}
@@ -208,10 +221,11 @@ def release_webcam():
 
 
 @app.websocket("/logs")
-async def logs_ws(ws: WebSocket):
+async def logs_ws(ws: WebSocket, testId: str = Query(...)):
     await ws.accept()
     await ws.send_text(json.dumps({"type": "log", "message": f"Socket Connected", "ts": utcnow()}))
     ws_clients.add(ws)
+    test_manager.test_id = testId
     try:
         # We don't expect client messages; just keep it open
         while True:

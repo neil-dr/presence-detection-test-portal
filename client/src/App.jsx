@@ -61,6 +61,7 @@ export default function App() {
   const [modal, setModal] = useState("welcome");
   const [webcamReady, setWebcamReady] = useState(false);
   const [videoError, setVideoError] = useState(null);
+  const [cameraLoading, setCameraLoading] = useState(false);
 
   const [testMode, setTestMode] = useState(null);
   const [testId, setTestId] = useState("");
@@ -98,7 +99,7 @@ export default function App() {
   // --- WS handling ---
   function openLogsSocket(id) {
     closeLogsSocket();
-    const wsUrl = `${WS_BASE}/logs`;
+    const wsUrl = `${WS_BASE}/logs?testId=${encodeURIComponent(id)}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -108,7 +109,6 @@ export default function App() {
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data);
-        console.log(msg)
         if (msg.type === "log" && msg.message) {
           pushLog(msg.message);
         } else if (msg.type === "presence") {
@@ -136,6 +136,7 @@ export default function App() {
   async function onConnectClicked() {
     try {
       setVideoError(null);
+      setCameraLoading(true)
       const res = await apiPost("/api/connect_webcam", {});
       if (res?.ok) {
         setWebcamReady(true);
@@ -145,6 +146,7 @@ export default function App() {
       setVideoError(e?.message || "Failed to acquire backend camera");
       pushLog(`Error: ${e?.message || "connect_webcam failed"}`);
     }
+    setCameraLoading(false)
   }
 
   function chooseDefined() {
@@ -285,7 +287,7 @@ export default function App() {
       <Modal open={modal === "welcome"} title="Welcome">
         <p className="text-sm" style={{ color: COLORS.subtle }}>Connect the backend camera, then pick a test type.</p>
         <div className="flex items-center gap-2 pt-2">
-          <Btn onClick={onConnectClicked}>Connect Backend Webcam</Btn>
+          <Btn disabled={cameraLoading} onClick={onConnectClicked}>{cameraLoading ? 'Connecting...' : 'Connect Backend Webcam'}</Btn>
           <Btn onClick={() => setModal("testType")} disabled={!webcamReady}>Next</Btn>
         </div>
       </Modal>
@@ -321,11 +323,12 @@ export default function App() {
       </Modal>
 
       <Modal open={modal === "resultTriggered"} title={`Presence detection ${!presenceDetected ? 'not' : ''} triggered`}>
-        <p className="text-sm" style={{ color: COLORS.subtle }}>Logs and test files saved to "{testId}_test_data".</p>
+        <p className="text-sm" style={{ color: COLORS.subtle }}>Logs and captured frames saved to "test_{testId}" folder.</p>
         <Btn onClick={restartFlow}>Start test again</Btn>
       </Modal>
 
       <Modal open={modal === "infinitePrompt"} title={`Presence ${!presenceDetected ? 'not' : ''} detected`}>
+        <p className="text-sm" style={{ color: COLORS.subtle }}>Logs and captured frames saved to "test_{testId}" folder.</p>
         <Btn onClick={() => {
           chooseInfinite()
         }}>Continue</Btn>

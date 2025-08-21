@@ -3,6 +3,8 @@ import mediapipe as mp
 from types import *
 from ultralytics import YOLO
 from config import *
+from pathlib import Path
+import test_manager
 
 yolo = YOLO(YOLO_MODEL_PATH)
 
@@ -11,6 +13,22 @@ mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(
     static_image_mode=False, max_num_faces=1, refine_landmarks=True)
 mp_drawing = mp.solutions.drawing_utils
+
+_frame_idx = 0
+prev_test_id = None
+
+
+def _next_frame_path() -> Path:
+    global _frame_idx, prev_test_id
+    if prev_test_id != test_manager.test_id:
+        prev_test_id = test_manager.test_id
+        _frame_idx = 0
+
+    _frames_dir = Path(f"test_{test_manager.test_id}") / "frames"
+    _frames_dir.mkdir(parents=True, exist_ok=True)
+    _frame_idx += 1
+    # 6-digit zero-padded index for natural sorting
+    return _frames_dir / f"frame_{_frame_idx:06d}.jpg"
 
 
 def detect_faces(frame):
@@ -36,6 +54,9 @@ def detect_faces(frame):
         if frontal_face:
             cv2.rectangle(frame, (x1, y1),
                           (x2, y2), (0, 255, 0), 2)
+
+    out_path = _next_frame_path()
+    cv2.imwrite(str(out_path), frame)
 
     return frontal_face, frame
 
